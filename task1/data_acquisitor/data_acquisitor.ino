@@ -18,6 +18,7 @@
 */
 
 #include <Arduino.h>
+#include <Arduino_LSM6DSOX.h>
 
 float getTemp();  // returns the temprature of the Arduino's sensor
 
@@ -26,11 +27,24 @@ constexpr unsigned int UPS = 24;       // Updates Per Second
 constexpr double UPMUS = (1e6 / UPS);  // Microseconds it takes to do an update
 double delta = 0;
 
+bool sensor_usable = false;
+
 void setup() {
   Serial.begin(115200);
   while (!Serial) {}
 
-  Serial.print("t, sensor_value");
+  // Writing the header
+#ifdef IMU
+  sensor_usable = IMU.begin();
+  if (!sensor_usable) {
+    // Failed to initialize IMU!
+    Serial.print("t");
+  } else {
+    Serial.print("t, sensor_value");
+  }
+#else
+  Serial.print("t");
+#endif
 }
 
 void loop() {
@@ -38,14 +52,26 @@ void loop() {
   delta += (cur - last) / UPMUS;
   last = cur;
   if (delta >= 1) {
+    // Writing a row
     Serial.print("\r\n");
     Serial.print(cur / 1e6);
-    Serial.print(",");
-    Serial.print(getTemp());
+    if (sensor_usable) {
+      Serial.print(",");
+      Serial.print(getTemp());
+    }
     delta -= 1;
   }
 }
 
 float getTemp() {
+#ifdef IMU
+  if (IMU.temperatureAvailable()) {
+    float temp = 0;
+    IMU.readTemperatureFloat(temp);
+
+    return temp;
+  }
+#endif
+
   return 0;
 }
