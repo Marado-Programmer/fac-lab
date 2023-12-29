@@ -48,7 +48,7 @@ void loop() {
   unsigned long cur = micros();
   delta += (cur - last) / UPMUS;
   last = cur;
-  if (delta >= 1) {
+  while (delta >= 1) {
     row_t row = get_row();
     row["t"] = cur / 1e6;
     generator->write_row(row);
