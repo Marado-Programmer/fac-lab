@@ -16,62 +16,66 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-
 #include <Arduino.h>
 #include <Arduino_LSM6DSOX.h>
 
-float getTemp();  // returns the temprature of the Arduino's sensor
+#include "./data_acquisitor.h"
+#include "./separator_separated_values.h"
 
 unsigned long last = micros();
 constexpr unsigned int UPS = 24;       // Updates Per Second
 constexpr double UPMUS = (1e6 / UPS);  // Microseconds it takes to do an update
 double delta = 0;
 
-bool sensor_usable = false;
+SeparatorSeparatedValues* generator = nullptr;
 
 void setup() {
   Serial.begin(115200);
   while (!Serial) {}
 
-  // Writing the header
-#ifdef IMU
-  sensor_usable = IMU.begin();
-  if (!sensor_usable) {
-    // Failed to initialize IMU!
-    Serial.print("t");
-  } else {
-    Serial.print("t, sensor_value");
-  }
-#else
-  Serial.print("t");
-#endif
+  generator = new CSV(&Serial);
+
+  add_columns(generator);
+
+  generator->write_header();
 }
 
 void loop() {
+  if (generator == nullptr) {
+    return;
+  }
+
   unsigned long cur = micros();
   delta += (cur - last) / UPMUS;
   last = cur;
   if (delta >= 1) {
-    // Writing a row
-    Serial.print("\r\n");
-    Serial.print(cur / 1e6);
-    if (sensor_usable) {
-      Serial.print(",");
-      Serial.print(getTemp());
-    }
+    row_t row = get_row();
+    row["t"] = cur / 1e6;
+    generator->write_row(row);
     delta -= 1;
   }
 }
 
-float getTemp() {
+void add_columns(SeparatorSeparatedValues* generator) {
+  generator->add_column("t");
+
 #ifdef IMU
-  if (IMU.temperatureAvailable()) {
+  if (IMU.begin()) {
+    generator->add_column("sensor_value");
+  }
+#endif
+}
+
+row_t get_row() {
+  row_t row;
+
+#ifdef IMU
+  if (IMU.begin() && IMU.temperatureAvailable()) {
     float temp = 0;
     IMU.readTemperatureFloat(temp);
-
-    return temp;
+    row["sensor_value"] = temp;
   }
 #endif
 
-  return 0;
+  return row;
 }
