@@ -28,7 +28,7 @@ from serial import Serial
 from serial.tools.list_ports import comports
 from serial.tools.list_ports_common import ListPortInfo
 
-MIN_ROWS = 10
+MIN_ROWS = 200
 
 
 def create_serial(port_info: ListPortInfo) -> Serial:
@@ -64,7 +64,7 @@ def write_csv(file_stream: BinaryIO, ser: Serial, n_rows: int) -> (list[str], di
             first = False
         else:
             for index, v in enumerate(split):
-                d[h[index]].append(float(v))
+                d[h[index]].append(float(v) if '.' in v else int(v))
 
             file_stream.write(bytes(f"{delimiter}{line.strip()}", "utf-8"))
 
@@ -83,6 +83,52 @@ def draw_plots(columns: list[str], data_dict: dict[str, list[float]] | DataFrame
         plt.plot(data_dict[x_column], data_dict[c])
 
         plt.show()
+
+
+def draw_subplots(columns: list[str], data_dict: dict[str, list[float]] | DataFrame, title: str) -> None:
+    x = int(math.floor(math.sqrt(len(columns) - 1)))
+    y = (len(columns) - 1) // x
+    fig, plots = plt.subplots(y, x, sharey=True, sharex=True)
+
+    fig.suptitle(title)
+
+    x_column = columns[0]
+    if y > 1:
+        for i in range(y):
+            if x > 1:
+                for j in range(x):
+                    c = columns[i * y + j + 1]
+                    plots[i, j].set_title(f"Graph {x_column}-{c}")
+                    plots[i, j].set_xlabel(x_column)
+                    plots[i, j].set_ylabel(c)
+
+                    plots[i, j].plot(data_dict[x_column], data_dict[c])
+            else:
+                c = columns[i + 1]
+                plots[i].set_title(f"Graph {x_column}-{c}")
+                plots[i].set_xlabel(x_column)
+                plots[i].set_ylabel(c)
+
+                plots[i].plot(data_dict[x_column], data_dict[c])
+    else:
+        if x > 1:
+            for j in range(x):
+                c = columns[j + 1]
+                plots[j].set_title(f"Graph {x_column}-{c}")
+                plots[j].set_xlabel(x_column)
+                plots[j].set_ylabel(c)
+
+                plots[j].plot(data_dict[x_column], data_dict[c])
+        else:
+            c = columns[1]
+            plots[0].set_title(f"Graph {x_column}-{c}")
+            plots[0].set_xlabel(x_column)
+            plots[0].set_ylabel(c)
+
+            plots[0].plot(data_dict[x_column], data_dict[c])
+
+    plt.tight_layout()
+    plt.show()
 
 
 def mean(vals: list[float] | Series) -> float:
@@ -128,3 +174,4 @@ if __name__ == '__main__':
             data_frame.to_csv(f"{directory}/pandas_{file_name}", index=False)
 
             draw_plots(header, data_frame)
+            draw_subplots(header, data_frame, serial.name)
