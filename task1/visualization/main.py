@@ -18,6 +18,7 @@
 
 import math
 import random
+from datetime import datetime
 from pathlib import Path
 from sys import stderr
 from time import time, sleep
@@ -237,6 +238,44 @@ def median(vals: list[float] | Series) -> float:
         return vals[mid] if odd else mean([vals[mid - 1], vals[mid]])
 
 
+def create_report(p: ListPortInfo, s: Serial, d: dict[str, list[float]] | DataFrame) -> str:
+    report = (f"fac-lab  Copyright (C) 2023  João Augusto Costa Branco Marado Torres\n"
+              f"This program comes with ABSOLUTELY NO WARRANTY.\n"
+              f"This is free software, and you are welcome to redistribute it\n"
+              f"under certain conditions; type `show c' for details.\n"
+              f"\n"
+              f"# Report\n"
+              f"## Date\n"
+              f"{datetime.today()}\n"
+              f"## Arduino\n"
+              f"{p.__str__()}\n"
+              f"{s.__str__()}\n"
+              f"## Statistics\n")
+
+    first = True
+    for col in d:
+        if first:
+            first = False
+            continue
+        else:
+            report += (f"### {col}\n"
+                       f"- average: {mean(d[col])}\n"
+                       f"- median: {median(d[col])}\n"
+                       f"- standard deviation: {d[col].std()}\n"
+                       f"- max: {d[col].max()}\n"
+                       f"- min: {d[col].min()}\n")
+
+    return report
+
+
+def write_report(r: str, s: Serial) -> None:
+    directory = "report"
+    file_name = f"report_{s.name}_{int(time())}.md"
+
+    with open(f"{directory}/{file_name}", 'ab') as stream:
+        stream.write(bytes(r, "utf-8"))
+
+
 if __name__ == '__main__':
     Path("data").mkdir(parents=True, exist_ok=True)
     Path("report").mkdir(parents=True, exist_ok=True)
@@ -249,5 +288,10 @@ if __name__ == '__main__':
             header, data_frame = create_csv(serial)
 
             draw(header, data_frame, serial)
+
+            rep = create_report(port, serial, data_frame)
+            print(rep)
+
+            write_report(rep, serial)
 
             serial.close()
