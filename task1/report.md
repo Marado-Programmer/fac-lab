@@ -197,3 +197,149 @@ float getTemp() {
 
 The library should provide the macro `IMU`. In case the macro isn't defined I use the preprocessor `#ifdef`. My idea it's to make the program work every time. If the macro `IMU` isn't defined or the sensor it's not usable, we won't send the sensor data and only the timestamps will be sent. The code's very ugly in my opinion right now, but if we have multiple sensors, one not working doesn't stop the program from working.
 I can even write support for multiple sensors and if I ever need to get the data from a specific board/sensor I know this code will work if it has support for that board/sensor even if some of the sensors do not exist.
+
+## Separation of concerns
+
+We can separate the data acquisition and the sending of the data. That's what I did.
+
+Here is [separator_separated_values.h](./data_acquisitor/separator_separated_values.h):
+``` cpp
+#include <Print.h>
+#include <string>
+#include <map>
+#include <vector>
+
+using std::string;
+
+typedef std::map<string, float> row_t;
+
+class SeparatorSeparatedValues {
+public:
+	SeparatorSeparatedValues(arduino::Print* stream,  const string& separator,const string& delimiter);
+	
+	void add_column(const string& column);
+	void write_header();
+	void write_row(const row_t& row);
+
+private:
+	arduino::Print* stream;
+	string separator;
+	string delimiter;
+	std::vector<string> columns;
+	bool headerWritten;
+};
+
+class CSV : public SeparatorSeparatedValues {
+public:
+	CSV(arduino::Print* stream);
+};
+
+class TSV : public SeparatorSeparatedValues {
+public:
+	TSV(arduino::Print* stream);
+};
+```
+
+Because we are writing C++, I created a class that sends the data formatted the way you want (on a "separator" separated values style, like CSV for example).
+See the [implementation](./data_acquisitor/separator_separated_values.cpp).
+
+The main things you need to know here are:
+- `void SeparatorSeparatedValues::add_column(const std::string& column)` lets you add a column to the header;
+- `void SeparatorSeparatedValues::write_header()` sends the header;
+- `void SeparatorSeparatedValues::write_row(const row_t& row)` sends a row with the data provided.
+
+Now our entry file can look like this:
+``` cpp
+#include <Arduino.h>
+#include <Arduino_LSM6DSOX.h>
+
+#include "./separator_separated_values.h"
+
+void add_columns(SeparatorSeparatedValues* generator);
+row_t get_row();
+
+constexpr unsigned int UPS = 24;
+constexpr double UPMUS = (1e6 / UPS);
+
+SeparatorSeparatedValues* generator = nullptr;
+
+void setup() {
+	Serial.begin(115200);
+	while (!Serial) {}
+	
+	generator = new CSV(&Serial);
+	
+	add_columns(generator);
+	
+	generator->write_header();
+}
+
+void loop() {
+	if (generator == nullptr) {
+		return;
+	}
+	
+	row_t row = get_row();
+	row["t"] = micros() / 1e6;
+	generator->write_row(row);
+	
+	delayMicroseconds(UPMUS);
+}
+
+void add_columns(SeparatorSeparatedValues* generator) {
+	generator->add_column("t");
+
+#ifdef IMU
+	if (IMU.begin()) {
+		generator->add_column("sensor_value");
+	}
+#endif
+}
+
+row_t get_row() {
+	row_t row;
+	
+#ifdef IMU
+	if (IMU.begin() && IMU.temperatureAvailable()) {
+		float temp = 0;
+		IMU.readTemperatureFloat(temp);
+		row["sensor_value"] = temp;
+	}
+#endif
+	
+	return row;
+}
+```
+
+See how much clean it is?
+
+The main reason in my opinion is the use of the [creational design pattern **builder**](https://refactoring.guru/design-patterns/builder) which makes us not worry about `else` statements because imagine how the `void add_columns(SeparatorSeparatedValues* generator)` would look like if we add support to one more sensor in the program. The amount of combinations of having/not having and working/not working sensors would grow exponents making the code full of `else` statements like:
+
+``` cpp
+if (A) {
+	if (B) {
+		// A, B
+	} else {
+		// A
+	}
+} else {
+	if (B) {
+		// B
+	} else {
+		//
+	} 
+}
+```
+
+That's only two sensors (A and B) by the way.
+
+Giving a map struct as the row with the data to send also prevents this condition statement hell.
+
+Also, you don't need to care about the order you give the data because it will be formatted depending on the header. If you care about the order of the columns then be careful about the header.
+
+### TODO
+
+- For now, we can only send `float` values as data values. I made it this way because I can't see the use of strings needing to be sent (unless it's some date, like a timestamp formatted with [RFC3339](https://www.rfc-editor.org/rfc/rfc3339), but you can always use [UNIX epoch](https://en.wikipedia.org/wiki/Unix_time)) and all the basic data types can be cast to a float using [`static_cast<float>()`](https://en.cppreference.com/w/cpp/language/static_cast). But in case we need other data types:
+	- We can use templates, but then we can only accept values of a specific type
+	- If we want to support multiple types, that's harder. We need to take into account that [`size_t Print::print()`](https://www.arduino.cc/reference/en/language/functions/communication/serial/print/) does not support every type as the first parameter. Maybe something with [`union`](https://en.cppreference.com/w/cpp/language/union) types using [polymorthism as showed by Low Level Learning](https://youtu.be/ZMzdrEYKyFQ?t=296&si=J8sLgql6lqij1-fd), `void*` pointers or [`std::any`](https://en.cppreference.com/w/cpp/utility/any).
+ - If strings were supported as values, we would have problems because they would need to either escape the string or just throw an exception in case of an invalid string. Imagine the value string "there's a, here" and the problem it would cause when parsing the CSV.
