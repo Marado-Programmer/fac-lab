@@ -17,9 +17,10 @@
 
 
 import math
+import random
 from pathlib import Path
 from sys import stderr
-from time import time
+from time import time, sleep
 from typing import BinaryIO
 
 import matplotlib.pyplot as plt
@@ -30,6 +31,10 @@ from serial.tools.list_ports import comports
 from serial.tools.list_ports_common import ListPortInfo
 
 MIN_ROWS = 200
+
+
+def inv_sig(x):
+    return math.log(x, math.e) - math.log(1 - x, math.e)
 
 
 def create_serial(port_info: ListPortInfo) -> Serial:
@@ -48,22 +53,46 @@ def get_n_rows() -> int:
     return max(MIN_ROWS, n)
 
 
-def write_csv(file_stream: BinaryIO, ser: Serial, n_rows: int) -> (list[str], dict[str, list[float]]):
+def create_csv(ser: Serial) -> (list[str], DataFrame):
+    directory = "data"
+    file_name = f"data_sensor_raw_{ser.name}_{int(time())}.csv"
+
+    with open(f"{directory}/{file_name}", 'ab') as stream:
+        h, d = write_csv(stream, ser, get_n_rows())
+
+    df = DataFrame(d)
+    df.to_csv(f"{directory}/pandas_{file_name}", index=False)
+
+    return h, df
+
+
+def write_csv(file_stream: BinaryIO, _ser: Serial, n_rows: int) -> (list[str], dict[str, list[float]]):
+    separator = ","
+    delimiter = "\r\n"
+
     first = True
 
     h = []
     d = {}
     while n_rows >= 0:  # first line will be the header so does not count as a row
-        line = str(ser.readline())
-        split = line.strip().split(separator)
+        # line = str(ser.readline())
+        # split = line.strip().split(separator)
 
         if first:
+            line = "timestamp,temperature,pressure"
+            split = line.strip().split(separator)
+
             h = split
             for column in h:
                 d[column] = []
             file_stream.write(bytes(line.strip(), "utf-8"))
             first = False
         else:
+            line = f"{time()},{random.uniform(-8, 8)},{inv_sig(random.uniform(0, 1))}"
+            split = line.strip().split(separator)
+
+            sleep(1 / 144)
+
             for index, v in enumerate(split):
                 d[h[index]].append(float(v) if '.' in v else int(v))
 
@@ -124,6 +153,68 @@ def draw_subplots(columns: list[str], data_dict: dict[str, list[float]] | DataFr
     plt.show()
 
 
+def draw_hist(columns: list[str], data_dict: dict[str, list[float]] | DataFrame, bins: int) -> None:
+    for c in columns[1:]:
+        plt.title(f"Histogram {c}")
+        plt.xlabel(c)
+        plt.ylabel("Amount")
+
+        plt.hist(data_dict[c], bins=bins)
+
+        plt.show()
+
+
+def draw_subhists(columns: list[str], data_dict: dict[str, list[float]] | DataFrame, title: str, bins: int) -> None:
+    x = int(math.floor(math.sqrt(len(columns) - 1)))
+    y = (len(columns) - 1) // x
+    fig, plots = plt.subplots(y, x, sharey=True, sharex=True)
+
+    fig.suptitle(title)
+
+    def conf_axe(axe: Axes, name: str) -> None:
+        plt.title(f"Histogram {c}")
+        axe.set_title(f"Histogram {c}")
+        axe.set_xlabel(name)
+        axe.set_ylabel("Amount")
+
+        axe.hist(data_dict[name], bins=bins)
+
+    if y > 1:
+        for i in range(y):
+            if x > 1:
+                for j in range(x):
+                    c = columns[i * y + j + 1]
+                    conf_axe(plots[i, j], c)
+            else:
+                c = columns[i + 1]
+                conf_axe(plots[i], c)
+    else:
+        if x > 1:
+            for j in range(x):
+                c = columns[j + 1]
+                conf_axe(plots[j], c)
+        else:
+            c = columns[1]
+            conf_axe(plots[0], c)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def draw(h: list[str], d: DataFrame, s: Serial) -> None:
+    draw_plots(h, d)
+    draw_subplots(h, d, s.name)
+    draw_hist(h, d, 20)
+    draw_subhists(h, d, s.name, 20)
+
+    plt.xlabel(h[1])
+    plt.ylabel(h[2])
+    plt.title(f"Scatter {h[1]}-{h[2]}")
+    plt.scatter(d[h[1]], d[h[2]], s=.2)
+
+    plt.show()
+
+
 def mean(vals: list[float] | Series) -> float:
     acc = 0
     for i in vals:
@@ -148,23 +239,15 @@ def median(vals: list[float] | Series) -> float:
 
 if __name__ == '__main__':
     Path("data").mkdir(parents=True, exist_ok=True)
+    Path("report").mkdir(parents=True, exist_ok=True)
 
     for port in comports():
         with create_serial(port) as serial:
             if not serial.is_open:
                 serial.open()
 
-            directory = "data"
-            file_name = f"data_sensor_raw_{serial.name}_{time()}.csv"
+            header, data_frame = create_csv(serial)
 
-            separator = ","
-            delimiter = "\r\n"
+            draw(header, data_frame, serial)
 
-            with open(f"{directory}/{file_name}", 'ab') as stream:
-                header, data = write_csv(stream, serial, get_n_rows())
-
-            data_frame = DataFrame(data)
-            data_frame.to_csv(f"{directory}/pandas_{file_name}", index=False)
-
-            draw_plots(header, data_frame)
-            draw_subplots(header, data_frame, serial.name)
+            serial.close()
