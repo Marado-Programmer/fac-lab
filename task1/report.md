@@ -343,3 +343,106 @@ Also, you don't need to care about the order you give the data because it will b
 	- We can use templates, but then we can only accept values of a specific type
 	- If we want to support multiple types, that's harder. We need to take into account that [`size_t Print::print()`](https://www.arduino.cc/reference/en/language/functions/communication/serial/print/) does not support every type as the first parameter. Maybe something with [`union`](https://en.cppreference.com/w/cpp/language/union) types using [polymorthism as showed by Low Level Learning](https://youtu.be/ZMzdrEYKyFQ?t=296&si=J8sLgql6lqij1-fd), `void*` pointers or [`std::any`](https://en.cppreference.com/w/cpp/utility/any).
  - If strings were supported as values, we would have problems because they would need to either escape the string or just throw an exception in case of an invalid string. Imagine the value string "there's a, here" and the problem it would cause when parsing the CSV.
+
+# Read serial communications
+
+Now we want to use [Python](https://www.python.org/) to manipulate the CSV sent by the Arduino board.
+
+To do this, we will use the [pyserial](https://pyserial.readthedocs.io/en/latest/) library.
+
+## Imports
+
+Here are the imports we will need by now:
+``` python
+from sys import stderr
+from time import time
+from typing import BinaryIO
+
+from serial import Serial
+from serial.tools.list_ports import comports
+from serial.tools.list_ports_common import ListPortInfo
+```
+
+## Minimun rows
+
+We also define a minimum of rows we can receive from the Arduino.
+``` python
+MIN_ROWS = 200
+```
+
+So when we ask the user how many rows he wants to process we do `max(MIN_ROWS, n)` to ensure the rows processed are at least `MIN_ROWS`.
+Here is the function that asks how many rows the user wants to process.
+``` python
+def get_n_rows() -> int:
+	n = int(input('How many rows of data you want to receive:\t'))
+	
+	if n < MIN_ROWS:
+		print(f"number of rows can't be less than {MIN_ROWS}, n_rows={n}\nnumber of rows it's now {MIN_ROWS}\n",
+		file=stderr)
+	
+	return max(MIN_ROWS, n)
+```
+We `print` to `stderr` since that message it's a warning and not an actual output.
+
+To understand that maybe think of the [`jq`](https://jqlang.github.io/jq/) CLI tool, and what happends when you give a bad JSON input; an error occurs. If that message that appears when an error occurs was printed to `stdout`, and that `stdout` was piped to another program, the other program wouldn't be prepared to recieve the weird error message, `stderr` it's the correct stream to send non-usable output.
+
+## Create a `serial.Serial`
+
+``` python
+def create_serial(port_info: ListPortInfo) -> Serial:
+	return Serial(port=port_info.device,
+			baudrate=115200,
+			timeout=1)
+```
+
+## ...
+
+``` python
+def create_csv(ser: Serial) -> dict[str, list[float]]:
+	directory = "data"
+	file_name = f"data_sensor_raw_{ser.name}_{int(time())}.csv"
+	
+	with open(f"{directory}/{file_name}", 'ab') as stream:
+		return write_csv(stream, ser, get_n_rows())
+
+
+def write_csv(file_stream: BinaryIO, ser: Serial, n_rows: int) -> dict[str, list[float]]:
+	separator = ","
+	delimiter = "\r\n"
+	
+	first = True
+	
+	h = []
+	d = {}
+	while n_rows >= 0:  # first line will be the header so does not count as a row
+		line = str(ser.readline())
+		split = line.strip().split(separator)
+		
+		if first:
+			h = split
+			for column in h:
+				d[column] = []
+
+			file_stream.write(bytes(line.strip(), "utf-8"))
+			first = False
+		else:
+			for index, v in enumerate(split):
+				d[h[index]].append(float(v) if '.' in v else int(v))
+			
+			file_stream.write(bytes(f"{delimiter}{line.strip()}", "utf-8"))
+		
+		n_rows -= 1
+	
+	return d
+```
+
+``` python
+for port in comports():
+	with create_serial(port) as serial:
+		if not serial.is_open:
+			serial.open()
+		
+		header, data = create_csv(serial)
+		
+		serial.close()
+```
