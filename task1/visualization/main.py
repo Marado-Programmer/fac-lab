@@ -23,6 +23,7 @@ from time import time
 from typing import BinaryIO
 
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 from pandas import DataFrame, Series
 from serial import Serial
 from serial.tools.list_ports import comports
@@ -93,39 +94,31 @@ def draw_subplots(columns: list[str], data_dict: dict[str, list[float]] | DataFr
     fig.suptitle(title)
 
     x_column = columns[0]
+
+    def conf_axe(axe: Axes, name: str) -> None:
+        axe.set_title(f"Graph {x_column}-{name}")
+        axe.set_xlabel(x_column)
+        axe.set_ylabel(name)
+
+        axe.plot(data_dict[x_column], data_dict[name])
+
     if y > 1:
         for i in range(y):
             if x > 1:
                 for j in range(x):
                     c = columns[i * y + j + 1]
-                    plots[i, j].set_title(f"Graph {x_column}-{c}")
-                    plots[i, j].set_xlabel(x_column)
-                    plots[i, j].set_ylabel(c)
-
-                    plots[i, j].plot(data_dict[x_column], data_dict[c])
+                    conf_axe(plots[i, j], c)
             else:
                 c = columns[i + 1]
-                plots[i].set_title(f"Graph {x_column}-{c}")
-                plots[i].set_xlabel(x_column)
-                plots[i].set_ylabel(c)
-
-                plots[i].plot(data_dict[x_column], data_dict[c])
+                conf_axe(plots[i], c)
     else:
         if x > 1:
             for j in range(x):
                 c = columns[j + 1]
-                plots[j].set_title(f"Graph {x_column}-{c}")
-                plots[j].set_xlabel(x_column)
-                plots[j].set_ylabel(c)
-
-                plots[j].plot(data_dict[x_column], data_dict[c])
+                conf_axe(plots[j], c)
         else:
             c = columns[1]
-            plots[0].set_title(f"Graph {x_column}-{c}")
-            plots[0].set_xlabel(x_column)
-            plots[0].set_ylabel(c)
-
-            plots[0].plot(data_dict[x_column], data_dict[c])
+            conf_axe(plots[0], c)
 
     plt.tight_layout()
     plt.show()
