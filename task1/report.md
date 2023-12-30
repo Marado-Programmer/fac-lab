@@ -131,3 +131,69 @@ void loop() {
 So much simpler. You also get to remove some unusable variables and make the code more readable.
 
 Also, probably Arduino's implementation of these two functions is so much more performant.
+
+# Using the sensors
+
+First of all, each Arduino board model will have different sensors and different ways to read the values from them.
+
+I have a [Nano RP2040 Connect](https://docs.arduino.cc/hardware/nano-rp2040-connect).
+
+In my case, the way I found to read values from my sensor it's by using the [Arduino_LSM6DSOX Library](https://github.com/arduino-libraries/Arduino_LSM6DSOX).
+
+``` cpp
+#include <Arduino.h>
+#include <Arduino_LSM6DSOX.h>
+
+float getTemp();
+
+constexpr unsigned int UPS = 24;
+constexpr double UPMUS = (1e6 / UPS);
+
+bool sensor_usable = false;
+
+void setup() {
+	Serial.begin(115200);
+	while (!Serial) {}
+
+	// Writing the header
+#ifdef IMU
+	sensor_usable = IMU.begin();
+	if (!sensor_usable) {
+		// Failed to initialize IMU!
+		Serial.print("t");
+	} else {
+		Serial.print("t,sensor_value");
+	}
+#else
+	Serial.print("t");
+#endif
+}
+
+void loop() {
+	// Writing a row
+	Serial.print("\r\n");
+	Serial.print(micros() / 1e6);
+	if (sensor_usable) {
+		Serial.print(",");
+		Serial.print(getTemp());
+	}
+	
+	delayMicroseconds(UPMUS);
+}
+
+float getTemp() {
+#ifdef IMU
+	if (IMU.temperatureAvailable()) {
+		float temp = 0;
+		IMU.readTemperatureFloat(temp);
+		
+		return temp;
+	}
+#endif
+	
+	return 0;
+}
+```
+
+The library should provide the macro `IMU`. In case the macro isn't defined I use the preprocessor `#ifdef`. My idea it's to make the program work every time. If the macro `IMU` isn't defined or the sensor it's not usable, we won't send the sensor data and only the timestamps will be sent. The code's very ugly in my opinion right now, but if we have multiple sensors, one not working doesn't stop the program from working.
+I can even write support for multiple sensors and if I ever need to get the data from a specific board/sensor I know this code will work if it has support for that board/sensor even if some of the sensors do not exist.
