@@ -54,20 +54,20 @@ def get_n_rows() -> int:
     return max(MIN_ROWS, n)
 
 
-def create_csv(ser: Serial) -> (list[str], DataFrame):
+def create_csv(ser: Serial) -> DataFrame:
     directory = "data"
     file_name = f"data_sensor_raw_{ser.name}_{int(time())}.csv"
 
     with open(f"{directory}/{file_name}", 'ab') as stream:
-        h, d = write_csv(stream, ser, get_n_rows())
+        d = write_csv(stream, ser, get_n_rows())
 
     df = DataFrame(d)
     df.to_csv(f"{directory}/pandas_{file_name}", index=False)
 
-    return h, df
+    return df
 
 
-def write_csv(file_stream: BinaryIO, _ser: Serial, n_rows: int) -> (list[str], dict[str, list[float]]):
+def write_csv(file_stream: BinaryIO, _ser: Serial, n_rows: int) -> dict[str, list[float]]:
     separator = ","
     delimiter = "\r\n"
 
@@ -89,7 +89,7 @@ def write_csv(file_stream: BinaryIO, _ser: Serial, n_rows: int) -> (list[str], d
             file_stream.write(bytes(line.strip(), "utf-8"))
             first = False
         else:
-            line = f"{time()},{random.uniform(-8, 8)},{inv_sig(random.uniform(0, 1))}"
+            line = f"{time()},{random.uniform(-5, 5)},{inv_sig(random.uniform(0, 1))}"
             split = line.strip().split(separator)
 
             sleep(1 / 144)
@@ -101,10 +101,12 @@ def write_csv(file_stream: BinaryIO, _ser: Serial, n_rows: int) -> (list[str], d
 
         n_rows -= 1
 
-    return h, d
+    return d
 
 
-def draw_plots(columns: list[str], data_dict: dict[str, list[float]] | DataFrame) -> None:
+def draw_plots(data_dict: dict[str, list[float]] | DataFrame) -> None:
+    columns = data_dict.columns
+
     x_column = columns[0]
     for c in columns[1:]:
         plt.title(f"Graph {x_column}-{c}")
@@ -116,7 +118,9 @@ def draw_plots(columns: list[str], data_dict: dict[str, list[float]] | DataFrame
         plt.show()
 
 
-def draw_subplots(columns: list[str], data_dict: dict[str, list[float]] | DataFrame, title: str) -> None:
+def draw_subplots(data_dict: dict[str, list[float]] | DataFrame, title: str) -> None:
+    columns = data_dict.columns
+
     x = int(math.floor(math.sqrt(len(columns) - 1)))
     y = (len(columns) - 1) // x
     fig, plots = plt.subplots(y, x, sharey=True, sharex=True)
@@ -154,7 +158,9 @@ def draw_subplots(columns: list[str], data_dict: dict[str, list[float]] | DataFr
     plt.show()
 
 
-def draw_hist(columns: list[str], data_dict: dict[str, list[float]] | DataFrame, bins: int) -> None:
+def draw_hist(data_dict: dict[str, list[float]] | DataFrame, bins: int) -> None:
+    columns = data_dict.columns
+
     for c in columns[1:]:
         plt.title(f"Histogram {c}")
         plt.xlabel(c)
@@ -165,7 +171,9 @@ def draw_hist(columns: list[str], data_dict: dict[str, list[float]] | DataFrame,
         plt.show()
 
 
-def draw_subhists(columns: list[str], data_dict: dict[str, list[float]] | DataFrame, title: str, bins: int) -> None:
+def draw_subhists(data_dict: dict[str, list[float]] | DataFrame, title: str, bins: int) -> None:
+    columns = data_dict.columns
+
     x = int(math.floor(math.sqrt(len(columns) - 1)))
     y = (len(columns) - 1) // x
     fig, plots = plt.subplots(y, x, sharey=True, sharex=True)
@@ -202,11 +210,13 @@ def draw_subhists(columns: list[str], data_dict: dict[str, list[float]] | DataFr
     plt.show()
 
 
-def draw(h: list[str], d: DataFrame, s: Serial) -> None:
-    draw_plots(h, d)
-    draw_subplots(h, d, s.name)
-    draw_hist(h, d, 20)
-    draw_subhists(h, d, s.name, 20)
+def draw(d: DataFrame, s: Serial) -> None:
+    draw_plots(d)
+    draw_subplots(d, s.name)
+    draw_hist(d, 20)
+    draw_subhists(d, s.name, 20)
+
+    h = d.columns
 
     plt.xlabel(h[1])
     plt.ylabel(h[2])
@@ -285,9 +295,9 @@ if __name__ == '__main__':
             if not serial.is_open:
                 serial.open()
 
-            header, data_frame = create_csv(serial)
+            data_frame = create_csv(serial)
 
-            draw(header, data_frame, serial)
+            draw(data_frame, serial)
 
             rep = create_report(port, serial, data_frame)
             print(rep)
