@@ -1,10 +1,11 @@
+import math
 from pathlib import Path
 from sys import stderr
 from time import time
 from typing import BinaryIO
 
 import matplotlib.pyplot as plt
-from pandas import DataFrame
+from pandas import DataFrame, Series
 from serial import Serial
 from serial.tools.list_ports import comports
 from serial.tools.list_ports_common import ListPortInfo
@@ -64,6 +65,28 @@ def draw_plots(columns: list[str], data_dict: dict[str, list[float]] | DataFrame
         plt.plot(data_dict[x_column], data_dict[c])
 
         plt.show()
+
+
+def mean(vals: list[float] | Series) -> float:
+    acc = 0
+    for i in vals:
+        acc += i
+
+    return acc / len(vals)
+
+
+def median(vals: list[float] | Series) -> float:
+    size = len(vals)
+    odd = bool(size & 1)
+    mid = int(math.floor(size / 2))
+
+    if isinstance(vals, Series):
+        sorted_vals = vals.sort_values()
+        sorted_vals.reset_index(drop=True, inplace=True)
+        return sorted_vals.get(mid) if odd else mean([sorted_vals.get(mid - 1), sorted_vals.get(mid)])
+    elif isinstance(vals, list):
+        vals.sort()
+        return vals[mid] if odd else mean([vals[mid - 1], vals[mid]])
 
 
 if __name__ == '__main__':
