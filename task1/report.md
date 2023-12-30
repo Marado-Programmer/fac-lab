@@ -74,7 +74,7 @@ Probably for most situations the difference it's insignificant for you.
 Then we define the `UPS` which stands for **U**pdates **P**er **S**econds. It will define how many rows of data you want to send in one second.
 
 We also define `UPMUS` that is, based on the `UPS`, how many microseconds it takes to do an update (because we are using `unsigned long micros()`).
-This is calculated knowing that $1s = 10^6μs$, in 10^6μs we do `UPS` updates only if in 1μs we do $(1*10^6)/UPS$ updates
+This is calculated knowing that $1s = 10^6μs$, in $10^6μs$ we do `UPS` updates only if in 1μs we do $(1*10^6)/UPS$ updates
 
 The `delta` variable controls how are we to do an update.
 It will usually have a value not lower than 0% and close to 100%.
@@ -106,7 +106,7 @@ Normally it shouldn't be a big value since `void loop()` loops very fast but ima
 
 We make `last = cur`.
 
-Now if the `delta` is >=100% do an update and subtract 100% to `delta`.
+Now if the `delta` is >=100% do an update and subtract 100% to `delta`. This can be transformed into a `while` loop which might make more sense and will work the same almost every time since it's hard for `delta` to reach 200%.
 
 In this case, the update is to send the row with the data.
 
@@ -117,6 +117,8 @@ The Arduino API offers [`void delay(unsigned long ms)`](https://www.arduino.cc/r
 Knowing this we could just do:
 ``` cpp
 void loop() {
+	unsigned long cur = micros();
+
 	Serial.print("\r\n");
 	Serial.print(cur / 1e6);
 	Serial.print(",");
