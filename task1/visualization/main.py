@@ -1,5 +1,8 @@
-from sys import stderr
 from pathlib import Path
+from sys import stderr
+from time import time
+
+from pandas import DataFrame
 from serial import Serial
 from serial.tools.list_ports import comports
 
@@ -32,10 +35,35 @@ if __name__ == '__main__':
 
             n_rows = get_n_rows()
 
-            file_name = f"data/data_sensor_raw_{serial.name}.csv"
+            directory = "data"
+            file_name = f"data_sensor_raw_{serial.name}_{time()}.csv"
 
-            with open(file_name, 'ab') as stream:
-                while n_rows > 0:
-                    stream.write(serial.readline())
-                    stream.write(b'\n')  # removed from serial.Serial.readline()
+            separator = ","
+            delimiter = "\r\n"
+
+            with open(f"{directory}/{file_name}", 'ab') as stream:
+                i = 1
+                first = True
+                header = []
+                data = {}
+                while n_rows >= 0:  # first line will be the header so does not count as a row
+                    line = str(serial.readline())
+                    split = line.strip().split(separator)
+
+                    if first:
+                        header = split
+                        for column in header:
+                            data[column] = []
+                        stream.write(bytes(line.strip(), "utf-8"))
+                        first = False
+                    else:
+                        for index, v in enumerate(split):
+                            data[header[index]].append(v)
+
+                        stream.write(bytes(f"{delimiter}{line.strip()}", "utf-8"))
+
+                    i += 1
                     n_rows -= 1
+
+                data_frame = DataFrame(data)
+                data_frame.to_csv(f"{directory}/pandas_{file_name}", index=False)
