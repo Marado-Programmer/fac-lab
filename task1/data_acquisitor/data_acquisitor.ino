@@ -22,10 +22,8 @@
 #include "./data_acquisitor.h"
 #include "./separator_separated_values.h"
 
-unsigned long last = micros();
 constexpr unsigned int UPS = 24;       // Updates Per Second
 constexpr double UPMUS = (1e6 / UPS);  // Microseconds it takes to do an update
-double delta = 0;
 
 SeparatorSeparatedValues* generator = nullptr;
 
@@ -45,15 +43,11 @@ void loop() {
     return;
   }
 
-  unsigned long cur = micros();
-  delta += (cur - last) / UPMUS;
-  last = cur;
-  while (delta >= 1) {
-    row_t row = get_row();
-    row["t"] = cur / 1e6;
-    generator->write_row(row);
-    delta -= 1;
-  }
+  row_t row = get_row();
+  row["t"] = micros() / 1e6;
+  generator->write_row(row);
+
+  delayMicroseconds(UPMUS);
 }
 
 void add_columns(SeparatorSeparatedValues* generator) {
