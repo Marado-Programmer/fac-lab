@@ -34,6 +34,13 @@ from serial.tools.list_ports_common import ListPortInfo
 MIN_ROWS = 200
 
 
+def sig(x):
+    if math.isinf(x):
+        return 0
+
+    return 1 / (1 + math.exp(-x))
+
+
 def inv_sig(x):
     return math.log(x, math.e) - math.log(1 - x, math.e)
 
@@ -67,7 +74,7 @@ def create_csv(ser: Serial) -> DataFrame:
     return df
 
 
-def write_csv(file_stream: BinaryIO, _ser: Serial, n_rows: int) -> dict[str, list[float]]:
+def write_csv(file_stream: BinaryIO, _ser: Serial, n_rows: int = 200) -> dict[str, list[float]]:
     separator = ","
     delimiter = "\r\n"
 
@@ -80,7 +87,7 @@ def write_csv(file_stream: BinaryIO, _ser: Serial, n_rows: int) -> dict[str, lis
         # split = line.strip().split(separator)
 
         if first:
-            line = "timestamp,temperature,pressure"
+            line = "timestamp,temperature,pressure,sin,cos,sig(tg)"
             split = line.strip().split(separator)
 
             h = split
@@ -89,7 +96,12 @@ def write_csv(file_stream: BinaryIO, _ser: Serial, n_rows: int) -> dict[str, lis
             file_stream.write(bytes(line.strip(), "utf-8"))
             first = False
         else:
-            line = f"{time()},{random.uniform(-5, 5)},{inv_sig(random.uniform(0, 1))}"
+            line = (f"{time()},"
+                    f"{random.uniform(-5, 5)},"
+                    f"{inv_sig(random.uniform(0, 1))},"
+                    f"{math.sin(n_rows * math.pi / 12) + random.uniform(-0.5, 0.5)},"
+                    f"{math.cos(n_rows * math.pi / 12) + random.uniform(-0.5, 0.5)},"
+                    f"{sig(math.tan(n_rows * math.pi / 3) + random.uniform(-2, 2))}")
             split = line.strip().split(separator)
 
             sleep(1 / 144)
@@ -122,7 +134,7 @@ def draw_subplots(data_dict: dict[str, list[float]] | DataFrame, title: str) -> 
     columns = data_dict.columns
 
     x = int(math.floor(math.sqrt(len(columns) - 1)))
-    y = (len(columns) - 1) // x
+    y = math.ceil((len(columns) - 1) / x)
     fig, plots = plt.subplots(y, x, sharey=True, sharex=True)
 
     fig.suptitle(title)
@@ -136,20 +148,31 @@ def draw_subplots(data_dict: dict[str, list[float]] | DataFrame, title: str) -> 
 
         axe.plot(data_dict[x_column], data_dict[name])
 
+    counter = 0
     if y > 1:
         for i in range(y):
             if x > 1:
                 for j in range(x):
-                    c = columns[i * y + j + 1]
+                    if counter >= len(columns) - 1:
+                        continue
+
+                    c = columns[i * x + j + 1]
                     conf_axe(plots[i, j], c)
+
+                    counter += 1
             else:
                 c = columns[i + 1]
                 conf_axe(plots[i], c)
     else:
         if x > 1:
             for j in range(x):
+                if counter >= len(columns) - 1:
+                    continue
+
                 c = columns[j + 1]
                 conf_axe(plots[j], c)
+
+                counter += 1
         else:
             c = columns[1]
             conf_axe(plots[0], c)
@@ -175,36 +198,92 @@ def draw_subhists(data_dict: dict[str, list[float]] | DataFrame, title: str, bin
     columns = data_dict.columns
 
     x = int(math.floor(math.sqrt(len(columns) - 1)))
-    y = (len(columns) - 1) // x
+    y = math.ceil((len(columns) - 1) / x)
     fig, plots = plt.subplots(y, x, sharey=True, sharex=True)
 
     fig.suptitle(title)
 
     def conf_axe(axe: Axes, name: str) -> None:
-        plt.title(f"Histogram {c}")
         axe.set_title(f"Histogram {c}")
         axe.set_xlabel(name)
         axe.set_ylabel("Amount")
 
         axe.hist(data_dict[name], bins=bins)
 
+    counter = 0
     if y > 1:
         for i in range(y):
             if x > 1:
                 for j in range(x):
-                    c = columns[i * y + j + 1]
+                    if counter >= len(columns) - 1:
+                        continue
+
+                    c = columns[i * x + j + 1]
                     conf_axe(plots[i, j], c)
+
+                    counter += 1
             else:
                 c = columns[i + 1]
                 conf_axe(plots[i], c)
     else:
         if x > 1:
             for j in range(x):
+                if counter >= len(columns) - 1:
+                    continue
+
                 c = columns[j + 1]
                 conf_axe(plots[j], c)
+
+                counter += 1
         else:
             c = columns[1]
             conf_axe(plots[0], c)
+
+    plt.tight_layout()
+    plt.show()
+
+def draw_scatter(data_dict: dict[str, list[float]] | DataFrame) -> None:
+    columns = data_dict.columns
+    n = len(columns)
+
+    for i in range(1, n):
+        for j in range(i + 1, n):
+
+            plt.title(f"Scatter {columns[i]}-{columns[j]}")
+            plt.xlabel(columns[i])
+            plt.ylabel(columns[j])
+
+            plt.scatter(data_dict[columns[i]], data_dict[columns[j]], s=1 / 3)
+            plt.show()
+
+
+def draw_subscatters(data_dict: dict[str, list[float]] | DataFrame, title: str) -> None:
+    columns = data_dict.columns
+    n = len(columns) - 2
+    n = int((n * (n + 1)) / 2)
+
+    x = int(math.floor(math.sqrt(n)))
+    y = math.ceil(n / x)
+    fig, plots = plt.subplots(y, x, sharey=True, sharex=True)
+
+    fig.suptitle(title)
+
+    def conf_axe(axe: Axes, name_x: str, name_y: str) -> None:
+        axe.set_title(f"Scatter {name_x}-{name_y}")
+        axe.set_xlabel(name_x)
+        axe.set_ylabel(name_y)
+
+        axe.scatter(data_dict[name_x], data_dict[name_y], s=1 / 3)
+
+    counter = 0
+    for i in range(1, len(columns)):
+        for j in range(i + 1, len(columns)):
+            if counter >= n:
+                continue
+
+            conf_axe(plots[counter // x, counter % x] if x > 1 and y > 1 else plots[counter], columns[i], columns[j])
+
+            counter += 1
 
     plt.tight_layout()
     plt.show()
@@ -215,13 +294,8 @@ def draw(d: DataFrame, s: Serial) -> None:
     draw_subplots(d, s.name)
     draw_hist(d, 20)
     draw_subhists(d, s.name, 20)
-
-    h = d.columns
-
-    plt.xlabel(h[1])
-    plt.ylabel(h[2])
-    plt.title(f"Scatter {h[1]}-{h[2]}")
-    plt.scatter(d[h[1]], d[h[2]], s=.2)
+    draw_scatter(d)
+    draw_subscatters(d, s.name)
 
     plt.show()
 
