@@ -460,43 +460,49 @@ The problem with this is that some of the ports available might not be sending t
 
 # Read serial communications (Using `pandas`)
 
+The teacher suggested using pandas tho. Here is another approach.
+
+First we import `pandas.DataFrame`
+
 ``` python
 from pandas import DataFrame
 ```
+
+Now we can recreate a new `create_csv`. It does the same work that `write_csv` (not existent anymore) did, but now returns a `pandas.Dataframe`. It also receives a new parameter `create_file` that if `True`, creates a CSV file on your disk.
 
 ``` python
 del create_csv
 del write_csv
 
-def create_csv(ser: Serial, n_rows: int) -> DataFrame:
-    separator = ","
+def create_csv(ser: Serial, n_rows: int, create_file: bool = False) -> DataFrame:
+	separator = ","
+	
+	directory = "data"
+	file_name = f"data_sensor_raw_{ser.name}_{int(time())}.csv"
+	
+	first = True
+	
+	h = []
+	d = {}
+	while n_rows >= 0:  # first line will be the header so does not count as a row
+		line = str(ser.readline())
+		split = line.strip().split(separator)
+		
+		if first:
+			h = split
+			for column in h:
+				d[column] = []
+			first = False
+		else:
+			for index, v in enumerate(split):
+				d[h[index]].append(float(v) if '.' in v else int(v))
 
-    directory = "data"
-    file_name = f"data_sensor_raw_{ser.name}_{int(time())}.csv"
-
-    first = True
-
-    h = []
-    d = {}
-    while n_rows >= 0:  # first line will be the header so does not count as a row
-        line = str(ser.readline())
-        split = line.strip().split(separator)
-
-        if first:
-            h = split
-            for column in h:
-                d[column] = []
-            first = False
-        else:
-            sleep(1 / 144)
-
-            for index, v in enumerate(split):
-                d[h[index]].append(float(v) if '.' in v else int(v))
-
-        n_rows -= 1
-
-    df = DataFrame(d)
-    df.to_csv(f"{directory}/pandas_{file_name}", index=False)
-
-    return df
+		n_rows -= 1
+	
+	df = DataFrame(d)
+	
+	if create_file:
+		df.to_csv(f"{directory}/pandas_{file_name}", index=False)
+	
+	return df
 ```
