@@ -58,7 +58,7 @@ def create_csv(ser: Serial) -> DataFrame:
     directory = "data"
     file_name = f"data_sensor_raw_{ser.name}_{int(time())}.csv"
 
-    with open(f"{directory}/{file_name}", 'ab') as stream:
+    with open(f"{directory}/{file_name}", 'xb') as stream:
         d = write_csv(stream, ser, get_n_rows())
 
     df = DataFrame(d)
@@ -292,9 +292,6 @@ if __name__ == '__main__':
 
     for port in comports():
         with create_serial(port) as serial:
-            if not serial.is_open:
-                serial.open()
-
             data_frame = create_csv(serial)
 
             draw(data_frame, serial)
@@ -303,5 +300,3 @@ if __name__ == '__main__':
             print(rep)
 
             write_report(rep, serial)
-
-            serial.close()
