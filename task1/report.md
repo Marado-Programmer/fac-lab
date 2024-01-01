@@ -388,6 +388,8 @@ To understand that maybe think of the [`jq`](https://jqlang.github.io/jq/) CLI t
 
 ## Create a `serial.Serial`
 
+This function will receive a `serial.tools.list_ports_common.ListPortInfo` that has info from the serial port. With that, we create a `serial.Serial` object that has methods that help us communicate with the serial port
+
 ``` python
 def create_serial(port_info: ListPortInfo) -> Serial:
 	return Serial(port=port_info.device,
@@ -395,14 +397,22 @@ def create_serial(port_info: ListPortInfo) -> Serial:
 			timeout=1)
 ```
 
-## ...
+## Creating the CSV file
+
+The `create_csv` receives the `serial.Serial` and will create a file in the directory "data" with the file name "data_sensor_raw" appended with some other things that can distinguish different CSV files.
+
+To create a file we are using the `open` function. This function returns a stream object for the file in the `file` parameter, the `x` mode "creates a new file and opens it for writing", the `b` mode opens the file in "binary mode" meaning we do not care about decoding in this situation.
+
+We use the with the keyword so that the stream is closed automatically after use.
+
+`write_csv` receives the `typing.BinaryIO` stream, the `serial.Serial`, and the number of rows you want the CSV to have. This function writes to the stream the CSV sent by the Arduino and at the same time creates a `dict` with the data for each column keeping the original order. `create_csv` will return it also.
 
 ``` python
 def create_csv(ser: Serial) -> dict[str, list[float]]:
 	directory = "data"
 	file_name = f"data_sensor_raw_{ser.name}_{int(time())}.csv"
 	
-	with open(f"{directory}/{file_name}", 'ab') as stream:
+	with open(f"{directory}/{file_name}", 'xb') as stream:
 		return write_csv(stream, ser, get_n_rows())
 
 
@@ -436,13 +446,57 @@ def write_csv(file_stream: BinaryIO, ser: Serial, n_rows: int) -> dict[str, list
 	return d
 ```
 
+## Using the functions
+
 ``` python
 for port in comports():
 	with create_serial(port) as serial:
-		if not serial.is_open:
-			serial.open()
-		
 		header, data = create_csv(serial)
-		
-		serial.close()
+```
+
+`serial.tools.list_ports.comports` "scans for available ports" and "returns a list of device names". For each available port, we create a serial and use it to create the CSV with `create_csv`. We use the `with` keyword so we don't need to call `serial.Serial.open()` and `serial.Serial.close()`
+
+The problem with this is that some of the ports available might not be sending the data we want (the CSV), just by not being an Arduino with our code uploaded.
+
+# Read serial communications (Using `pandas`)
+
+``` python
+from pandas import DataFrame
+```
+
+``` python
+del create_csv
+del write_csv
+
+def create_csv(ser: Serial, n_rows: int) -> DataFrame:
+    separator = ","
+
+    directory = "data"
+    file_name = f"data_sensor_raw_{ser.name}_{int(time())}.csv"
+
+    first = True
+
+    h = []
+    d = {}
+    while n_rows >= 0:  # first line will be the header so does not count as a row
+        line = str(ser.readline())
+        split = line.strip().split(separator)
+
+        if first:
+            h = split
+            for column in h:
+                d[column] = []
+            first = False
+        else:
+            sleep(1 / 144)
+
+            for index, v in enumerate(split):
+                d[h[index]].append(float(v) if '.' in v else int(v))
+
+        n_rows -= 1
+
+    df = DataFrame(d)
+    df.to_csv(f"{directory}/pandas_{file_name}", index=False)
+
+    return df
 ```
