@@ -45,6 +45,22 @@ def inv_sig(x):
     return math.log(x, math.e) - math.log(1 - x, math.e)
 
 
+def largest_divisor(x: int) -> int:
+    if x % 2 == 0:
+        return x // 2
+
+    for i in range(3, int(math.sqrt(x)) + 2, 2):
+        if x % i == 0:
+            return x // i
+
+    return 1
+
+
+def find_squarest_rectangle(n) -> (int, int):
+    x = largest_divisor(n)
+    return x, n // x
+
+
 def create_serial(port_info: ListPortInfo) -> Serial:
     return Serial(port=port_info.device,
                   baudrate=115200,
@@ -116,8 +132,8 @@ def write_csv(file_stream: BinaryIO, _ser: Serial, n_rows: int = 200) -> dict[st
     return d
 
 
-def draw_plots(data_dict: dict[str, list[float]] | DataFrame) -> None:
-    columns = data_dict.columns
+def draw_plots(data_dict: dict[str, list[float]] | DataFrame, together: bool = True) -> None:
+    columns = data_dict.columns if isinstance(data_dict, DataFrame) else [*data_dict]
 
     x_column = columns[0]
     for c in columns[1:]:
@@ -127,15 +143,19 @@ def draw_plots(data_dict: dict[str, list[float]] | DataFrame) -> None:
 
         plt.plot(data_dict[x_column], data_dict[c])
 
+        if not together:
+            plt.show()
+
+    if together:
         plt.show()
 
 
 def draw_subplots(data_dict: dict[str, list[float]] | DataFrame, title: str) -> None:
-    columns = data_dict.columns
+    columns = data_dict.columns if isinstance(data_dict, DataFrame) else [*data_dict]
 
-    x = int(math.floor(math.sqrt(len(columns) - 1)))
-    y = math.ceil((len(columns) - 1) / x)
-    fig, plots = plt.subplots(y, x, sharey=True, sharex=True)
+    x, y = find_squarest_rectangle(len(columns) - 1)
+
+    fig, plots = plt.subplots(y, x, sharex=True, squeeze=False)
 
     fig.suptitle(title)
 
@@ -148,41 +168,16 @@ def draw_subplots(data_dict: dict[str, list[float]] | DataFrame, title: str) -> 
 
         axe.plot(data_dict[x_column], data_dict[name])
 
-    counter = 0
-    if y > 1:
-        for i in range(y):
-            if x > 1:
-                for j in range(x):
-                    if counter >= len(columns) - 1:
-                        continue
-
-                    c = columns[i * x + j + 1]
-                    conf_axe(plots[i, j], c)
-
-                    counter += 1
-            else:
-                c = columns[i + 1]
-                conf_axe(plots[i], c)
-    else:
-        if x > 1:
-            for j in range(x):
-                if counter >= len(columns) - 1:
-                    continue
-
-                c = columns[j + 1]
-                conf_axe(plots[j], c)
-
-                counter += 1
-        else:
-            c = columns[1]
-            conf_axe(plots[0], c)
+    for i in range(y):
+        for j in range(x):
+            conf_axe(plots[i, j], columns[i * x + j + 1])
 
     plt.tight_layout()
     plt.show()
 
 
 def draw_hist(data_dict: dict[str, list[float]] | DataFrame, bins: int) -> None:
-    columns = data_dict.columns
+    columns = data_dict.columns if isinstance(data_dict, DataFrame) else [*data_dict]
 
     for c in columns[1:]:
         plt.title(f"Histogram {c}")
@@ -195,49 +190,24 @@ def draw_hist(data_dict: dict[str, list[float]] | DataFrame, bins: int) -> None:
 
 
 def draw_subhists(data_dict: dict[str, list[float]] | DataFrame, title: str, bins: int) -> None:
-    columns = data_dict.columns
+    columns = data_dict.columns if isinstance(data_dict, DataFrame) else [*data_dict]
 
-    x = int(math.floor(math.sqrt(len(columns) - 1)))
-    y = math.ceil((len(columns) - 1) / x)
-    fig, plots = plt.subplots(y, x, sharey=True, sharex=True)
+    x, y = find_squarest_rectangle(len(columns) - 1)
+
+    fig, plots = plt.subplots(y, x, squeeze=False)
 
     fig.suptitle(title)
 
     def conf_axe(axe: Axes, name: str) -> None:
-        axe.set_title(f"Histogram {c}")
+        axe.set_title(f"Histogram {name}")
         axe.set_xlabel(name)
         axe.set_ylabel("Amount")
 
         axe.hist(data_dict[name], bins=bins)
 
-    counter = 0
-    if y > 1:
-        for i in range(y):
-            if x > 1:
-                for j in range(x):
-                    if counter >= len(columns) - 1:
-                        continue
-
-                    c = columns[i * x + j + 1]
-                    conf_axe(plots[i, j], c)
-
-                    counter += 1
-            else:
-                c = columns[i + 1]
-                conf_axe(plots[i], c)
-    else:
-        if x > 1:
-            for j in range(x):
-                if counter >= len(columns) - 1:
-                    continue
-
-                c = columns[j + 1]
-                conf_axe(plots[j], c)
-
-                counter += 1
-        else:
-            c = columns[1]
-            conf_axe(plots[0], c)
+    for i in range(y):
+        for j in range(x):
+            conf_axe(plots[i, j], columns[i * x + j + 1])
 
     plt.tight_layout()
     plt.show()
@@ -262,9 +232,9 @@ def draw_subscatters(data_dict: dict[str, list[float]] | DataFrame, title: str) 
     n = len(columns) - 2
     n = int((n * (n + 1)) / 2)
 
-    x = int(math.floor(math.sqrt(n)))
-    y = math.ceil(n / x)
-    fig, plots = plt.subplots(y, x, sharey=True, sharex=True)
+    x, y = find_squarest_rectangle(n)
+
+    fig, plots = plt.subplots(y, x, squeeze=False)
 
     fig.suptitle(title)
 
@@ -278,11 +248,7 @@ def draw_subscatters(data_dict: dict[str, list[float]] | DataFrame, title: str) 
     counter = 0
     for i in range(1, len(columns)):
         for j in range(i + 1, len(columns)):
-            if counter >= n:
-                continue
-
-            conf_axe(plots[counter // x, counter % x] if x > 1 and y > 1 else plots[counter], columns[i], columns[j])
-
+            conf_axe(plots[counter // x, counter % x], columns[i], columns[j])
             counter += 1
 
     plt.tight_layout()
@@ -290,7 +256,7 @@ def draw_subscatters(data_dict: dict[str, list[float]] | DataFrame, title: str) 
 
 
 def draw(d: DataFrame, s: Serial) -> None:
-    draw_plots(d)
+    draw_plots(d[["timestamp", "sin", "cos"]])
     draw_subplots(d, s.name)
     draw_hist(d, 20)
     draw_subhists(d, s.name, 20)
