@@ -242,13 +242,13 @@ def draw_subhists(data_dict: dict[str, list[float]] | DataFrame, title: str, bin
     plt.tight_layout()
     plt.show()
 
+
 def draw_scatter(data_dict: dict[str, list[float]] | DataFrame) -> None:
     columns = data_dict.columns
     n = len(columns)
 
     for i in range(1, n):
         for j in range(i + 1, n):
-
             plt.title(f"Scatter {columns[i]}-{columns[j]}")
             plt.xlabel(columns[i])
             plt.ylabel(columns[j])
