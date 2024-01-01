@@ -449,6 +449,7 @@ def write_csv(file_stream: BinaryIO, ser: Serial, n_rows: int) -> dict[str, list
 ## Using the functions
 
 ``` python
+Path("data").mkdir(parents=True, exist_ok=True) # Just to make sure the dir for the csv exists
 for port in comports():
 	with create_serial(port) as serial:
 		header, data = create_csv(serial)
