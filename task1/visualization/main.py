@@ -14,51 +14,23 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-
 import math
 import random
-from datetime import datetime
 from pathlib import Path
 from sys import stderr
 from time import time, sleep
 from typing import BinaryIO
 
-import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
-from pandas import DataFrame, Series
+from pandas import DataFrame
 from serial import Serial
 from serial.tools.list_ports import comports
 from serial.tools.list_ports_common import ListPortInfo
 
+from maths import inv_sig, sig
+from plots import draw_plots, draw_subplots, draw_hist, draw_subhists, draw_scatter, draw_subscatters
+from report import create_report, write_report
+
 MIN_ROWS = 200
-
-
-def sig(x):
-    if math.isinf(x):
-        return 0
-
-    return 1 / (1 + math.exp(-x))
-
-
-def inv_sig(x):
-    return math.log(x, math.e) - math.log(1 - x, math.e)
-
-
-def largest_divisor(x: int) -> int:
-    if x % 2 == 0:
-        return x // 2
-
-    for i in range(3, int(math.sqrt(x)) + 2, 2):
-        if x % i == 0:
-            return x // i
-
-    return 1
-
-
-def find_squarest_rectangle(n) -> (int, int):
-    x = largest_divisor(n)
-    return x, n // x
 
 
 def create_serial(port_info: ListPortInfo) -> Serial:
@@ -132,198 +104,13 @@ def write_csv(file_stream: BinaryIO, _ser: Serial, n_rows: int = 200) -> dict[st
     return d
 
 
-def draw_plots(data_dict: dict[str, list[float]] | DataFrame, together: bool = True) -> None:
-    columns = data_dict.columns if isinstance(data_dict, DataFrame) else [*data_dict]
-
-    x_column = columns[0]
-    for c in columns[1:]:
-        plt.title(f"Graph {x_column}-{c}")
-        plt.xlabel(x_column)
-        plt.ylabel(c)
-
-        plt.plot(data_dict[x_column], data_dict[c])
-
-        if not together:
-            plt.show()
-
-    if together:
-        plt.show()
-
-
-def draw_subplots(data_dict: dict[str, list[float]] | DataFrame, title: str) -> None:
-    columns = data_dict.columns if isinstance(data_dict, DataFrame) else [*data_dict]
-
-    x, y = find_squarest_rectangle(len(columns) - 1)
-
-    fig, plots = plt.subplots(y, x, sharex=True, squeeze=False)
-
-    fig.suptitle(title)
-
-    x_column = columns[0]
-
-    def conf_axe(axe: Axes, name: str) -> None:
-        axe.set_title(f"Graph {x_column}-{name}")
-        axe.set_xlabel(x_column)
-        axe.set_ylabel(name)
-
-        axe.plot(data_dict[x_column], data_dict[name])
-
-    for i in range(y):
-        for j in range(x):
-            conf_axe(plots[i, j], columns[i * x + j + 1])
-
-    plt.tight_layout()
-    plt.show()
-
-
-def draw_hist(data_dict: dict[str, list[float]] | DataFrame, bins: int) -> None:
-    columns = data_dict.columns if isinstance(data_dict, DataFrame) else [*data_dict]
-
-    for c in columns[1:]:
-        plt.title(f"Histogram {c}")
-        plt.xlabel(c)
-        plt.ylabel("Amount")
-
-        plt.hist(data_dict[c], bins=bins)
-
-        plt.show()
-
-
-def draw_subhists(data_dict: dict[str, list[float]] | DataFrame, title: str, bins: int) -> None:
-    columns = data_dict.columns if isinstance(data_dict, DataFrame) else [*data_dict]
-
-    x, y = find_squarest_rectangle(len(columns) - 1)
-
-    fig, plots = plt.subplots(y, x, squeeze=False)
-
-    fig.suptitle(title)
-
-    def conf_axe(axe: Axes, name: str) -> None:
-        axe.set_title(f"Histogram {name}")
-        axe.set_xlabel(name)
-        axe.set_ylabel("Amount")
-
-        axe.hist(data_dict[name], bins=bins)
-
-    for i in range(y):
-        for j in range(x):
-            conf_axe(plots[i, j], columns[i * x + j + 1])
-
-    plt.tight_layout()
-    plt.show()
-
-
-def draw_scatter(data_dict: dict[str, list[float]] | DataFrame) -> None:
-    columns = data_dict.columns
-    n = len(columns)
-
-    for i in range(1, n):
-        for j in range(i + 1, n):
-            plt.title(f"Scatter {columns[i]}-{columns[j]}")
-            plt.xlabel(columns[i])
-            plt.ylabel(columns[j])
-
-            plt.scatter(data_dict[columns[i]], data_dict[columns[j]], s=1 / 3)
-            plt.show()
-
-
-def draw_subscatters(data_dict: dict[str, list[float]] | DataFrame, title: str) -> None:
-    columns = data_dict.columns
-    n = len(columns) - 2
-    n = int((n * (n + 1)) / 2)
-
-    x, y = find_squarest_rectangle(n)
-
-    fig, plots = plt.subplots(y, x, squeeze=False)
-
-    fig.suptitle(title)
-
-    def conf_axe(axe: Axes, name_x: str, name_y: str) -> None:
-        axe.set_title(f"Scatter {name_x}-{name_y}")
-        axe.set_xlabel(name_x)
-        axe.set_ylabel(name_y)
-
-        axe.scatter(data_dict[name_x], data_dict[name_y], s=1 / 3)
-
-    counter = 0
-    for i in range(1, len(columns)):
-        for j in range(i + 1, len(columns)):
-            conf_axe(plots[counter // x, counter % x], columns[i], columns[j])
-            counter += 1
-
-    plt.tight_layout()
-    plt.show()
-
-
 def draw(d: DataFrame, s: Serial) -> None:
     draw_plots(d[["timestamp", "sin", "cos"]])
-    draw_subplots(d, s.name)
+    draw_subplots(d)
     draw_hist(d, 20)
-    draw_subhists(d, s.name, 20)
+    draw_subhists(d, 20)
     draw_scatter(d)
     draw_subscatters(d, s.name)
-
-    plt.show()
-
-
-def mean(vals: list[float] | Series) -> float:
-    acc = 0
-    for i in vals:
-        acc += i
-
-    return acc / len(vals)
-
-
-def median(vals: list[float] | Series) -> float:
-    size = len(vals)
-    odd = bool(size & 1)
-    mid = int(math.floor(size / 2))
-
-    if isinstance(vals, Series):
-        sorted_vals = vals.sort_values()
-        sorted_vals.reset_index(drop=True, inplace=True)
-        return sorted_vals.get(mid) if odd else mean([sorted_vals.get(mid - 1), sorted_vals.get(mid)])
-    elif isinstance(vals, list):
-        vals.sort()
-        return vals[mid] if odd else mean([vals[mid - 1], vals[mid]])
-
-
-def create_report(p: ListPortInfo, s: Serial, d: dict[str, list[float]] | DataFrame) -> str:
-    report = (f"fac-lab  Copyright (C) 2023  João Augusto Costa Branco Marado Torres\n"
-              f"This program comes with ABSOLUTELY NO WARRANTY.\n"
-              f"This is free software, and you are welcome to redistribute it\n"
-              f"under certain conditions; type `show c' for details.\n"
-              f"\n"
-              f"# Report\n"
-              f"## Date\n"
-              f"{datetime.today()}\n"
-              f"## Arduino\n"
-              f"{p.__str__()}\n"
-              f"{s.__str__()}\n"
-              f"## Statistics\n")
-
-    first = True
-    for col in d:
-        if first:
-            first = False
-            continue
-        else:
-            report += (f"### {col}\n"
-                       f"- average: {mean(d[col])}\n"
-                       f"- median: {median(d[col])}\n"
-                       f"- standard deviation: {d[col].std()}\n"
-                       f"- max: {d[col].max()}\n"
-                       f"- min: {d[col].min()}\n")
-
-    return report
-
-
-def write_report(r: str, s: Serial) -> None:
-    directory = "report"
-    file_name = f"report_{s.name}_{int(time())}.md"
-
-    with open(f"{directory}/{file_name}", 'ab') as stream:
-        stream.write(bytes(r, "utf-8"))
 
 
 if __name__ == '__main__':
