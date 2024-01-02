@@ -3,3 +3,4 @@
 *.tsv
 *.tab
 task1/visualization/report/
+*.pyc

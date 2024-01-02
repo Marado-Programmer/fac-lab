@@ -104,13 +104,14 @@ def write_csv(file_stream: BinaryIO, _ser: Serial, n_rows: int = 200) -> dict[st
     return d
 
 
-def draw(d: DataFrame, s: Serial) -> None:
+def draw(d: DataFrame) -> None:
     draw_plots(d[["timestamp", "sin", "cos"]])
+    draw_subplots(d, groups=[["sin", "cos"], ["temperature", "pressure"]])
     draw_subplots(d)
-    draw_hist(d, 20)
-    draw_subhists(d, 20)
-    draw_scatter(d)
-    draw_subscatters(d, s.name)
+    # draw_hist(d, 20)
+    # draw_subhists(d, 20)
+    # draw_scatter(d)
+    # draw_subscatters(d)
 
 
 if __name__ == '__main__':
@@ -121,7 +122,7 @@ if __name__ == '__main__':
         with create_serial(port) as serial:
             data_frame = create_csv(serial)
 
-            draw(data_frame, serial)
+            draw(data_frame)
 
             rep = create_report(port, serial, data_frame)
             print(rep)

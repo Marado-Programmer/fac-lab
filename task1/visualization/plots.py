@@ -45,10 +45,13 @@ def draw_plots(data_dict: Data, together: bool = True) -> None:
         plt.show()
 
 
-def draw_subplots(data_dict: Data, config: ConfigureFig | None = None) -> None:
+def draw_subplots(data_dict: Data, config: ConfigureFig | None = None, groups: list[list[str]] | None = None) -> None:
     columns = data_dict.columns if isinstance(data_dict, DataFrame) else [*data_dict]
 
-    x, y = find_squarest_rectangle(len(columns) - 1)
+    if groups is None:
+        groups = [[c] for c in columns[1:]]
+
+    x, y = find_squarest_rectangle(len(groups))
 
     fig, plots = plt.subplots(y, x, sharex=True, squeeze=False)
 
@@ -57,16 +60,19 @@ def draw_subplots(data_dict: Data, config: ConfigureFig | None = None) -> None:
 
     x_column = columns[0]
 
-    def conf_axe(axe: Axes, name: str) -> None:
-        axe.set_title(f"Graph {x_column}-{name}")
+    def conf_axe(axe: Axes, names: list[str]) -> None:
+        y_column = "; ".join(names)
+        axe.set_title(f"Graph {x_column}-[{y_column}]")
         axe.set_xlabel(x_column)
-        axe.set_ylabel(name)
+        axe.set_ylabel(y_column)
 
-        axe.plot(data_dict[x_column], data_dict[name])
+        for name in names:
+            print(name)
+            axe.plot(data_dict[x_column], data_dict[name], )
 
     for i in range(y):
         for j in range(x):
-            conf_axe(plots[i, j], columns[i * x + j + 1])
+            conf_axe(plots[i, j], groups[i * x + j])
 
     plt.tight_layout()
     plt.show()
